@@ -8,61 +8,58 @@ import os
 import numpy as np
 import pandas as pd
 
-import matplotlib.pyplot as plt
-
+import argparse
 
 from sklearn.metrics import mean_squared_error as mse, mean_absolute_error as mae, mean_absolute_percentage_error as mape
 from sklearn.model_selection import TimeSeriesSplit
 
-
-import tensorflow as tf
-from dataclasses import dataclass
+from statsmodels.tsa.arima.model import ARIMA
 
 
+def main():
 
-data_path = './data'
-fn = 'data.csv'
-ITEM_NR = 80028349
+    parser = argparse.ArgumentParser()
 
-df = pd.read_csv(os.path.join(data_path, fn))
+    parser.add_argument("--data_path", help="Complete path to input file", default='./data')
+    parser.add_argument("--file_name", help="Input file name")
+    parser.add_argument("--item_number", help="Enter Item Number to process")
 
-df['date'] = pd.to_datetime(df.day)
-dfd = df.set_index('date')
-dfd = dfd[['item_number', 'item_name', 'purchase_price',
-       'suggested_retail_price', 'orders_quantity', 'sales_quantity', 'revenue']]
+    args = parser.parse_args()
+    args = vars(args)
 
-dfi = dfd.loc[dfd.item_number==ITEM_NR] 
-sr = dfi.sales_quantity.values
+    data_path = args["data_path"]
+    fn = args["file_name"]
+    ITEM_NR = args["item_number"]
 
-trn_size = int(sr.shape[0] * 0.66)
-tst_size = sr.shape[0] - trn_size
+    #data_path = './data'
+    #fn = 'data.csv'
+    #ITEM_NR = 80028349
 
-Xtrn, Xtst = sr[:trn_size], sr[trn_size:]
+    df = pd.read_csv(os.path.join(data_path, fn))
 
+    df['date'] = pd.to_datetime(df.day)
+    dfd = df.set_index('date')
+    dfd = dfd[['item_number', 'item_name', 'purchase_price', 
+               'suggested_retail_price', 'orders_quantity', 
+               'sales_quantity', 'revenue']]
 
-# Walking forward evaluation of an ARIMA model
-ARIMA_PARAMS = (1, 0, 4) # AR of grade 1, no differencing, MA = 4
+    dfi = dfd.loc[dfd.item_number==ITEM_NR] 
+    sr = dfi.sales_quantity.values
 
-preds, history, results = eval_arima(Xtrn, Xtst, ARIMA_PARAMS) # let's predict at least one year
-print(results)
+    trn_size = int(sr.shape[0] * 0.66)
+    tst_size = sr.shape[0] - trn_size
 
+    Xtrn, Xtst = sr[:trn_size], sr[trn_size:]
+
+    # Walking forward evaluation of an ARIMA model
+    ARIMA_PARAMS = (1, 0, 4) # AR of grade 1, no differencing, MA = 4
+
+    preds, history, results = eval_arima(Xtrn, Xtst, ARIMA_PARAMS) # let's predict at least one year
+    print(results)
+
+    return
 
 # ### Functions
-
-def forecast_ma(sr, window_size=1, fn=np.mean):
-    ''' moving average forecasting
-    '''
-    
-    metrics = {'mse': mse, 'mae': mae, 'mape': mape}
-    
-    sr_agg = sr.rolling(window_size).apply(fn)
-    preds = sr_agg.shift(1)[window_size:]
-    history = sr[window_size:]
-    
-    results = {metric_name: metric(history, preds) for metric_name, metric in metrics.items()} 
-    
-    return preds, history, results
-
 
 def eval_arima(Xtrn, Xtst, arima_params=(1, 0, 0), verbose=False):
     '''
@@ -87,4 +84,3 @@ def eval_arima(Xtrn, Xtst, arima_params=(1, 0, 0), verbose=False):
     
     results = {metric_name: metric(Xtst, preds) for metric_name, metric in metrics.items()} 
     return preds, history, results 
-
